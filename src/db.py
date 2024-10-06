@@ -1,8 +1,12 @@
+import os
 import psycopg2
 
 
 class PostgresDB:
-    def __init__(self, dbname, user, password, host='localhost', port=5432):
+    def __init__(self, host='postgres', port=5432):
+        dbname = os.getenv('POSTGRES_DB')
+        user = os.getenv('POSTGRES_USER')
+        password = os.getenv('POSTGRES_PASSWORD')
         self.conn = psycopg2.connect(
             dbname=dbname,
             user=user,
