@@ -1,0 +1,7 @@
+logging
+pandas
+scikit-learn
+pyyaml
+nltk
+numpy
+coverage
