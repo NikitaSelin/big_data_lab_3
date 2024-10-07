@@ -17,7 +17,7 @@ options {
         stage('Clone github repository') {
             steps {
                 cleanWs()
-                sh 'git clone -b main https://github.com/NikitaSelin/big_data_lab_3.git'
+                sh 'git clone https://github.com/NikitaSelin/big_data_lab_3.git'
 			}
 		}
 
