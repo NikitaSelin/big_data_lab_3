@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDS=credentials('big_data_lab_2')
+        DOCKERHUB_CREDS=credentials('big_data_lab_3')
+        VAULT_CREDS=credentials('ansible_vault')
         LC_ALL   = "en_US.UTF-8"
         LANG     = "en_US.UTF-8"
         LANGUAGE = "en_US.UTF-8"
@@ -16,13 +17,13 @@ options {
         stage('Clone github repository') {
             steps {
                 cleanWs()
-                sh 'git clone -b main https://github.com/NikitaSelin/big_data_lab_2.git'
+                sh 'git clone -b main https://github.com/NikitaSelin/big_data_lab_3.git'
 			}
 		}
 
         stage('Checkout repo dir') {
             steps {
-                sh 'cd big_data_lab_2 && dir'
+                sh 'cd big_data_lab_3 && dir'
 			}
 	    }
 
@@ -32,20 +33,32 @@ options {
             }
         }
 
+        stage('Create password file') {
+            steps {
+                sh 'cd big_data_lab_3 && touch ansible-password.txt && echo $VAULT_CREDS_PSW >> ansible-password.txt'
+            }
+        }
+
+        stage('Create environment') {
+            steps {
+                sh 'cd big_data_lab_3 && ansible-playbook setup.yml --vault-password-file ansible-password.txt'
+            }
+        }
+
         stage('Building docker') {
             steps {
-                sh 'cd big_data_lab_2 && docker compose build'
+                sh 'cd big_data_lab_3 && docker compose build'
             }
         }
         stage('Create and run docker container') {
             steps {
-                sh 'cd big_data_lab_2 && docker compose up -d'
+                sh 'cd big_data_lab_3 && docker compose up -d'
             }
         }
 
         stage('Checkout coverage report') {
             steps{
-                dir("big_data_lab_2") {
+                dir("big_data_lab_3") {
                     sh 'docker compose logs -t --tail 10'
                 }
             }
@@ -53,7 +66,7 @@ options {
 
         stage('Push') {
             steps {
-                sh 'docker push synphase/big_data_lab_2:latest'
+                sh 'docker push synphase/big_data_lab_3:latest'
             }
         }
 	}
