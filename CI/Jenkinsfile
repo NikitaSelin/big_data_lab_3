@@ -35,7 +35,7 @@ options {
 
         stage('Create environment') {
             steps {
-                sh 'bash create_env.sh'
+                sh 'cd big_data_lab_3 && bash create_env.sh'
             }
         }
 
