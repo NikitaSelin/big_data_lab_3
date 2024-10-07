@@ -33,15 +33,9 @@ options {
             }
         }
 
-        stage('Create password file') {
-            steps {
-                sh 'cd big_data_lab_3 && touch ansible-password.txt && echo $VAULT_CREDS_PSW >> ansible-password.txt'
-            }
-        }
-
         stage('Create environment') {
             steps {
-                sh 'cd big_data_lab_3 && ansible-playbook setup.yml --vault-password-file ansible-password.txt'
+                sh 'bash create_env.sh'
             }
         }
 
