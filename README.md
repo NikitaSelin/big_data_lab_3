@@ -1,65 +1,72 @@
-# Лабораторная работа №2. Взаимодействие с источниками данных
+# Лабораторная работа №3. Размещение секретов в хранилище
 ## Цель работы
-Получить навыки выгрузки исходных данных и отправки результатов модели с использованием различных источников данных согласно варианту задания.
+Получить навыки размещения секретов в хранилище и взаимодействия с ним.
 ## Ход работы
-Для реализации источника данных была выбрана база данных PostgreSQL, так как согласно варианту не получилось развернуть Greenplum на ОС Windows 10 (была попытка развёртки в коренной ОС и в Docker контейнере, однако, безуспешно).
-
-Код реализации базы приведён ниже:
-```
-import psycopg2
-
-
-class PostgresDB:
-    def __init__(self, dbname, user, password, host='localhost', port=5432):
-        self.conn = psycopg2.connect(
-            dbname=dbname,
-            user=user,
-            password=password,
-            host=host,
-            port=port
-        )
-        self.cursor = self.conn.cursor()
-
-    def create_table(self):
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS results (
-                id SERIAL PRIMARY KEY,
-                Round VARCHAR(10000),
-                air_date_group VARCHAR(10000),
-                Question VARCHAR(10000),
-                Value INT
-            );
-        ''')
-        self.conn.commit()
-
-    def insert_data(self, round, air_date_group, question, value):
-        self.cursor.execute('''
-            INSERT INTO results (Round, air_date_group, Question, Value) VALUES (%s, %s, %s, %s);
-        ''', (round, air_date_group, question, value))
-        self.conn.commit()
-
-    def drop_table(self):
-        self.cursor.execute('DROP TABLE IF EXISTS results;')
-        self.conn.commit()
-
-    def close(self):
-        self.cursor.close()
-        self.conn.close()
-```
-
-В файл кода predict.py был добавлен код для взаимодействия с БД.
-```
-self.dbname = self.config["DATABASE"]["dbname"]
-self.user = self.config["DATABASE"]["user"]
-self.password = self.config["DATABASE"]["password"]
-self.db = PostgresDB(self.dbname, self.user, self.password)
-self.db.create_table()
-```
+Для реализации хранилища секретов был использован Ansible. Был добавлен файл с секретам в зашифрованном виде, который выглядит следующим образом:
 
 ```
-round = str(data["X"][0]["Round"])
-air_date_group = str(data["X"][0]["air_date_group"])
-question = str(data["X"][0]["Question"])
-prediction = classifier.predict(X)
-self.db.insert_data(round, air_date_group, question, int(prediction))
+$ANSIBLE_VAULT;1.1;AES256
+37643436616530313461373139303632393936363939653665636436356365666435633231363761
+6163643236396362346362306531326165633936653431330a313863316465396361346462653464
+36383661653831336565353363613333396539373763323962396366373238396438633835363662
+3361613438346232320a643230393435613163343739373862333162333964356536343230626234
+62383631633162313437663937333961636236663436376231656138386537353139646565656563
+30623333303764366337353338313932653035623333316130396561363238633961616662366133
+34643031326133393831353864376431633665306231366563353965616362333531333330373863
+61333861333862393565
+```
+
+Был создан файл setup.yml для запуска Ansible Playbook, который принимает файл с паролем от Ansible для расшифровки vault.yml и создания файла .env, который потом используется Docker'ом для создания переменных окружения.
+
+```
+- name: Set up PostgreSQL credentials
+  hosts: localhost
+  tasks:
+    - name: Load PostgreSQL credentials from vault
+      ansible.builtin.include_vars:
+        file: vault.yml
+        name: db_creds
+
+    - name: Create .env file for Docker
+      ansible.builtin.copy:
+        dest: .env
+        content: |
+          POSTGRES_USER={{ db_creds.postgres_user }}
+          POSTGRES_PASSWORD={{ db_creds.postgres_password }}
+          POSTGRES_DB={{ db_creds.postgres_db }}
+        mode: '0644'
+```
+
+В docker-compose.yml были использованы переменные, которые были расшифрованы из Ansible.
+
+```
+version: '3.8'
+services:
+   web:
+      depends_on:
+         - postgres
+      build: .
+      command: bash -c "python src/preprocess.py && python src/train.py && python src/predict.py -m RAND_FOREST -t func && coverage run src/unit_tests/test_preprocess.py && coverage run -a src/unit_tests/test_training.py && coverage report -m"
+      environment:
+         - POSTGRES_USER=${POSTGRES_USER}
+         - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+         - POSTGRES_DB=${POSTGRES_DB}
+      ports:
+         - 8000:8000
+      image: synphase/big_data_lab_3:latest
+   postgres:
+      image: postgres:latest
+      container_name: postgres
+      environment:
+         - POSTGRES_USER=${POSTGRES_USER}
+         - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+         - POSTGRES_DB=${POSTGRES_DB}
+      ports:
+         - "5432:5432"
+      volumes:
+         - pgdata:/var/lib/postgresql/data
+      restart: on-failure
+
+volumes:
+   pgdata:
 ```
